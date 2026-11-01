@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import type { HealthResponse } from '../shared/api'
 import { testVideos } from './videos'
 import { VideoFeed } from './VideoFeed'
+import { startDiagnostics } from './player/diagnostics'
 
 export default function App() {
+  useEffect(startDiagnostics, [])
   // Opt-in comparison for the iPhone slowdown investigation; no saved setting.
   const [preloadAdjacent] = useState(() => new URLSearchParams(window.location.search).get('preload') !== 'off')
   const [apiStatus, setApiStatus] = useState('API 接続中')

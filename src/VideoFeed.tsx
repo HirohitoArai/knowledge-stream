@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { PlaybackCoordinator } from './player/PlaybackCoordinator'
-import { inMountWindow, selectActive, visibleRatio } from './player/visibility'
+import { inMountWindow, retainedPlayers, selectActive, visibleRatio } from './player/visibility'
 import { YouTubePlayer } from './player/YouTubePlayer'
 import type { TestVideo } from './videos'
+import { countPlayerWork } from './player/diagnostics'
 
 export function VideoFeed({ videos, preloadAdjacent = true }: { videos: TestVideo[]; preloadAdjacent?: boolean }) {
   const viewport = useRef<HTMLDivElement>(null)
@@ -10,11 +11,17 @@ export function VideoFeed({ videos, preloadAdjacent = true }: { videos: TestVide
   const [coordinator] = useState(() => new PlaybackCoordinator())
   const [active, setActive] = useState<number | null>(null)
   const [center, setCenter] = useState(0)
+  const [previousPlayers, setPreviousPlayers] = useState<number[]>([])
+  const mounted = retainedPlayers(center, videos.length, previousPlayers, preloadAdjacent)
+  useEffect(() => {
+    setPreviousPlayers(previous => retainedPlayers(center, videos.length, previous, preloadAdjacent))
+  }, [center, videos.length, preloadAdjacent])
 
   useEffect(() => {
     const root = viewport.current
     if (!root) return
     const measure = () => {
+      countPlayerWork('measure')
       const bounds = root.getBoundingClientRect()
       // Intersection includes viewport clipping (small screens/zoom/URL bar changes).
       const clipped = new DOMRect(Math.max(0, bounds.left), Math.max(0, bounds.top),
@@ -86,22 +93,16 @@ export function VideoFeed({ videos, preloadAdjacent = true }: { videos: TestVide
           <h2>{video.label}</h2>
         </div>
         <div className="player-slot">
-          {(preloadAdjacent ? inMountWindow(index, center) : index === center)
-            ? <YouTubePlayer video={video} index={index} coordinator={coordinator} />
+          {mounted.includes(index)
+            ? <YouTubePlayer video={video} index={index} coordinator={coordinator} load={preloadAdjacent ? inMountWindow(index, center) : index === center} />
             : <><div className="player-surface placeholder">近づくとプレーヤーを読み込みます</div><div className="player-status" /></>}
-        </div>
-        <div className="video-actions">
-          <a className="youtube-link" href={`https://www.youtube.com/watch?v=${video.externalVideoId}`} target="_blank" rel="noreferrer">YouTubeで開く ↗</a>
-          <div role="group" aria-label="この動画の音声">
-            <button disabled={active !== index} onClick={() => coordinator.setMuted(index, false)}>音声オン</button>
-            <button disabled={active !== index} onClick={() => coordinator.setMuted(index, true)}>音声オフ</button>
-          </div>
         </div>
       </article>)}
     </main>
     <section className="feed-controls" aria-label="動画の切り替え">
       <div><button onClick={() => navigate(center - 1)} disabled={center === 0}>↑ 前へ</button>
-        <span aria-live="polite">{center + 1} / {videos.length}</span>
+        <div className="current-video"><span aria-live="polite">{center + 1} / {videos.length}</span>
+          <a className="youtube-link" href={`https://www.youtube.com/watch?v=${videos[center].externalVideoId}`} target="_blank" rel="noreferrer">{videos[center].label} ↗</a></div>
         <button onClick={() => navigate(center + 1)} disabled={center === videos.length - 1}>次へ ↓</button></div>
     </section>
   </>

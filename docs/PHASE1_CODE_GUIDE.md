@@ -35,8 +35,8 @@ pnpm dev
 | `src/App.tsx` | ヘッダー、Worker疎通表示、動画フィード、3タブの外枠 |
 | `src/videos.ts` | Shorts 3本の内部UUID・URL/ID・独自説明ラベルを一元管理 |
 | `src/player/youtubeUrl.ts` | Shorts/watch/短縮/embed URLまたは生IDから動画IDを抽出。実在・埋め込み可否は判定しない |
-| `src/VideoFeed.tsx` | 可視領域の測定、activeの更新、現在±1件のマウント、前後操作 |
-| `src/player/visibility.ts` | 可視面積率、active選択、マウント範囲を決める純粋関数 |
+| `src/VideoFeed.tsx` | 可視領域の測定、activeの更新、現在±1件のロード・最大3個のiframe再利用、前後操作 |
+| `src/player/visibility.ts` | 可視面積率、active選択、ロード範囲と再利用対象を決める純粋関数 |
 | `src/player/PlaybackCoordinator.ts` | 再生対象を一元管理し、他のプレーヤーを停止 |
 | `src/player/youtubeApi.ts` | 公式IFrame APIの共有ロード、15秒タイムアウト、失敗後の再試行 |
 | `src/player/YouTubePlayer.tsx` | YT.Player生成・イベント処理・エラー表示・破棄 |
@@ -55,28 +55,28 @@ pnpm dev
 1. `App`が`/api/v1/health`を呼び、Workerの接続状態を表示します。動画一覧はローカルの固定データを使うため、このAPIの失敗でフィードは停止しません。
 2. `VideoFeed`がカードを配置し、先頭と次の動画のプレーヤーをマウントします。APIスクリプトの読み込みPromiseを共有し、複数コンポーネントからの重複ロードを抑えます。
 3. スクロール・リサイズ・タブ表示状態の変更などでカードとプレーヤーの可視面積を測定します。カード65%以上、プレーヤー50%以上が表示されているものをactiveにします。該当しなければactiveは`null`です。
-4. `PlaybackCoordinator`が非active動画を停止してから、active動画へ音声設定を適用して再生要求します。初期設定は音声オンで、外側の音声操作の選択をページ内で引き継ぎます。自動再生の成功自体はブラウザとYouTubeに依存します。
-5. activeが確定したら、その前後1件だけを残します。範囲外のコンポーネントをアンマウントし、プレーヤーを破棄します。
+4. `PlaybackCoordinator`が非active動画を停止してから、active動画へ音声設定を適用して再生要求します。利用者の希望により毎回unMuteを要求します。独自の音声オン/オフボタンはありません。自動再生の成功自体はブラウザとYouTubeに依存します。
+5. フィード内で最も見えるカードをcenterとし、現在±1だけをロード対象にします。範囲外ではstopVideoでメディアを停止・読み込み中止し、iframeは最大3個まで再利用します。再生へ戻す際はloadVideoByIdを1回使います。保持枠から外れたPlayer、再試行、画面unmountではdestroyします。
 
 ```mermaid
 flowchart TD
   Input[スクロール・リサイズ・表示状態] --> Measure[VideoFeed: 可視面積を測定]
   Measure --> Select[visibility: activeを選択]
   Select --> Control[PlaybackCoordinator: 非active停止 → active再生要求]
-  Select --> Window[現在±1件をマウント]
-  Window --> Player[YouTubePlayer: 生成・破棄]
+  Measure --> Window[center前後1件をロード・iframe最大3個を再利用]
+  Window --> Player[YouTubePlayer: 生成・停止・再利用・破棄]
   Player --> Events[ready・state・error・autoplay blocked]
   Events --> Control
   Events --> Status[プレーヤー外の状態案内]
 ```
 
-`active`は現在の再生対象、`center`は最後にactiveになった動画です。切り替え途中でactiveが`null`になってもcenterを保持し、必要なiframeを毎回生成し直さないようにしています。前後ボタンはいったん停止して対象カードへ移動し、そのタップの処理内で可視面積を再測定します。条件を満たす準備済みプレーヤーへ同期的に再生要求を出しますが、ブラウザが許可するかは別の問題です。
+`active`は現在の再生対象、`center`はフィード枠内で最も見える動画です。再生に必要な可視率を満たさなくてもロード対象を更新します。前後ボタンはいったん停止して対象カードへ移動し、そのタップの処理内で可視面積を再測定します。条件を満たす準備済みプレーヤーへ同期的に再生要求を出しますが、ブラウザが許可するかは別の問題です。
 
 ## 再生制御で注意する点
 
 - readyイベントは動画移動後に届くことがあります。`register()`時点で現在のactiveを確認するため、遅れて準備ができた非active動画は再生しません。
 - `onStateChange`でも非activeの再生/バッファリングを検知して停止します。Reactの描画完了だけに再生判断を依存させません。
-- 同じactiveの測定が続いても再生要求を繰り返しません。表示が変わらない間、標準UIでの手動停止を維持します。別動画から戻ったときやタブ復帰時は選択済みの音声設定で自動再生を再度試みます。
+- 同じactiveの測定が続いても再生要求を繰り返しません。表示が変わらない間、標準UIでの手動停止を維持します。別動画から戻ったときやタブ復帰時は音声オンで自動再生を再度試みます。
 - `useLayoutEffect`のcleanupで、ReactがDOMを外す前に停止・破棄します。通常の`useEffect`のcleanupだとYouTube APIが外れたiframeを操作する警告につながります。
 - React管理のホスト要素の中に専用の子要素を作り、YouTubeにはその子だけを置き換えさせます。cleanup後の非同期イベントは`cancelled`で無視します。
 - 自動再生拒否と動画の削除・埋め込み禁止は別扱いです。拒否時はYouTube標準の再生操作を案内し、エラー時は独立した領域に再試行を表示します。
@@ -97,6 +97,10 @@ Phase 1は最大5件程度の固定データを想定し、カード全件を測
 
 ## テストと引き継ぎ
 
-現在の44テストは、表示率・ロード範囲、再生停止順序、遅延イベント、タブ非表示、StrictMode、DOM接続中の破棄、エラー/再試行、Workerレスポンス、URL/ID抽出と固定データ、音声操作の対象制限・設定引き継ぎ、タップ内の再生要求、長いバッファリングへの案内を確認します。実際のYouTube通信をモックするテストもあるため、端末固有の再生やタッチ挙動は保証しません。
+現在の52テストは、表示率・ロード範囲、再生停止順序、遅延イベント、タブ非表示、StrictMode、DOM接続中の破棄、エラー/再試行、Workerレスポンス、URL/ID抽出と固定データ、毎回の音声オン要求、最大3個の再利用・範囲外メディア停止、タップ内の再生要求、長いバッファリングへの案内を確認します。実際のYouTube通信をモックするテストもあるため、端末固有の再生やタッチ挙動は保証しません。
 
 共有後は[Phase 1.5の変更点・実機チェック](PHASE1_5_SHORTS.md)を使ってiPhone Safariを確認してください。実施日・端末・OS・結果を残し、旧横動画版の実機結果と今回のShorts版を混同しないことが引き継ぎ事項です。
+
+## ローカル負荷計測（2026-11-01追加）
+
+通常URLに `?diagnostics=1` を付けると、`src/player/diagnostics.ts` が5秒ごとにブラウザーコンソールへ集計値を出します。生成/破棄/再利用/再生要求/状態イベント/測定の回数、DOM上のiframe数、対応ブラウザーではLong Tasksの件数と時間です。外部送信・保存・動画ID記録はありません。パラメーターなしでは計測タイマーもObserverも起動しません。親ページのLong Tasksはiframe内部のCPU/GPU/メモリ全体を表すものではありません。

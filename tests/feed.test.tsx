@@ -5,15 +5,21 @@ import { testVideos } from '../src/videos'
 import type { PlaybackCoordinator, PlayerControl } from '../src/player/PlaybackCoordinator'
 
 const players = vi.hoisted(() => new Map<number, PlayerControl>())
+const created = vi.hoisted(() => [] as PlayerControl[])
 vi.mock('../src/player/YouTubePlayer', async () => {
-  const { createElement, useLayoutEffect } = await import('react')
-  return { YouTubePlayer: ({ index, coordinator }: { index: number; coordinator: PlaybackCoordinator }) => {
+  const { createElement, useLayoutEffect, useState } = await import('react')
+  return { YouTubePlayer: ({ index, coordinator, load }: { index: number; coordinator: PlaybackCoordinator; load: boolean }) => {
+    const [player] = useState(() => {
+      const result = { pauseVideo: vi.fn(), playVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn() }
+      created.push(result)
+      return result
+    })
     useLayoutEffect(() => {
-      const player = { pauseVideo: vi.fn(), playVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn() }
+      if (!load) return
       players.set(index, player)
       coordinator.register(index, player)
       return () => { coordinator.unregister(index, player); players.delete(index) }
-    }, [index, coordinator])
+    }, [index, coordinator, load, player])
     return createElement('div', { className: 'player-surface' })
   } }
 })
@@ -22,7 +28,7 @@ let position = 0
 let scrollWorks = true
 const originalScroll = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollTo')
 beforeEach(() => {
-  players.clear(); position = 0; scrollWorks = true
+  players.clear(); created.length = 0; position = 0; scrollWorks = true
   vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
     configurable: true,
@@ -108,6 +114,7 @@ it.each([true, false])('bounds mounted players over 100 transitions (preload=%s)
   }
   // Each retired player was started exactly once, never restarted by later navigation.
   for (const player of retired) expect(player.playVideo).toHaveBeenCalledOnce()
+  if (preloadAdjacent) expect(created).toHaveLength(3)
   view.unmount()
   expect(players.size).toBe(0)
 })

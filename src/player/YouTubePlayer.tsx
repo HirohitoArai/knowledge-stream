@@ -1,7 +1,8 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { TestVideo } from '../videos'
-import type { PlaybackCoordinator } from './PlaybackCoordinator'
+import type { PlaybackCoordinator, PlayerControl } from './PlaybackCoordinator'
 import { loadYouTubeApi } from './youtubeApi'
+import { countPlayerWork } from './diagnostics'
 
 export function errorMessage(code: number): string {
   switch (code) {
@@ -14,8 +15,8 @@ export function errorMessage(code: number): string {
   }
 }
 
-export function YouTubePlayer({ video, index, coordinator }: {
-  video: TestVideo; index: number; coordinator: PlaybackCoordinator
+export function YouTubePlayer({ video, index, coordinator, load = true }: {
+  video: TestVideo; index: number; coordinator: PlaybackCoordinator; load?: boolean
 }) {
   const host = useRef<HTMLDivElement>(null)
   const [attempt, setAttempt] = useState(0)
@@ -24,12 +25,18 @@ export function YouTubePlayer({ video, index, coordinator }: {
   const [blocked, setBlocked] = useState(false)
   const [slow, setSlow] = useState(false)
   const [canRequestPlay, setCanRequestPlay] = useState(false)
+  const loadRef = useRef(load)
+  const synchronize = useRef<(() => void) | null>(null)
+  useLayoutEffect(() => { loadRef.current = load; synchronize.current?.() }, [load])
 
   // Cleanup must run before React detaches the host; YouTube requires a live iframe.
   useLayoutEffect(() => {
     let cancelled = false
     let player: YT.Player | undefined
     let registered = false
+    let ready = false
+    let suspended = false
+    let needsVideoLoad = false
     let readyTimeout: number | undefined
     let bufferTimeout: number | undefined
     const clearBufferWait = () => {
@@ -37,6 +44,35 @@ export function YouTubePlayer({ video, index, coordinator }: {
       bufferTimeout = undefined
       setSlow(false)
     }
+    // One ordered API command on re-entry. cueVideoById followed immediately by
+    // playVideo races with asynchronous cue completion during rapid navigation.
+    const control: PlayerControl = {
+      pauseVideo: () => player!.pauseVideo(),
+      mute: () => player!.mute(),
+      unMute: () => player!.unMute(),
+      playVideo: () => {
+        if (needsVideoLoad) {
+          needsVideoLoad = false
+          player!.loadVideoById(video.externalVideoId)
+          countPlayerWork('reused')
+        } else player!.playVideo()
+      },
+    }
+    const syncLoading = () => {
+      if (!ready || !player) return
+      if (loadRef.current) {
+        suspended = false
+        if (!registered) { registered = true; coordinator.register(index, control) }
+      } else {
+        if (registered) { coordinator.unregister(index, control); registered = false }
+        if (!suspended) { suspended = true; needsVideoLoad = true; player.stopVideo(); countPlayerWork('mediaStopped') }
+        clearBufferWait()
+        setCanRequestPlay(false)
+        setBlocked(false)
+        setStatus('再生待機中')
+      }
+    }
+    synchronize.current = syncLoading
     setError(null)
     setBlocked(false)
     setSlow(false)
@@ -54,6 +90,7 @@ export function YouTubePlayer({ video, index, coordinator }: {
         readyTimeout = window.setTimeout(() => {
           if (!cancelled) setError('プレーヤーの応答がありません。通信を確認して再試行してください。')
         }, 15_000)
+        countPlayerWork('created')
         player = new api.Player(mount, {
           width: '100%', height: '100%', videoId: video.externalVideoId,
           playerVars: { autoplay: 0, controls: 1, playsinline: 1, origin: window.location.origin },
@@ -64,11 +101,13 @@ export function YouTubePlayer({ video, index, coordinator }: {
               setError(null)
               setCanRequestPlay(true)
               setStatus('準備完了。再生されない場合はYouTubeの再生ボタンを押してください。')
-              registered = true
-              coordinator.register(index, event.target)
+              player = event.target
+              ready = true
+              syncLoading()
             },
             onStateChange: event => {
-              if (cancelled) return
+              if (cancelled || !loadRef.current) return
+              countPlayerWork('stateEvents')
               coordinator.onStateChange(index, event.target, event.data)
               setCanRequestPlay(event.data !== 1 && event.data !== 3)
               if (event.data === 3 && coordinator.canPlay(index)) {
@@ -84,7 +123,7 @@ export function YouTubePlayer({ video, index, coordinator }: {
               setStatus(states[event.data] ?? '再生待機中')
             },
             onAutoplayBlocked: () => {
-              if (cancelled) return
+              if (cancelled || !loadRef.current) return
               clearBufferWait()
               setBlocked(true)
               setStatus('音声付きの自動再生は許可されませんでした。「再生する」を押してください。')
@@ -106,19 +145,21 @@ export function YouTubePlayer({ video, index, coordinator }: {
     }, 150)
     return () => {
       cancelled = true
+      synchronize.current = null
       clearTimeout(startTimeout)
       clearTimeout(readyTimeout)
       clearTimeout(bufferTimeout)
       if (player) {
-        if (registered) coordinator.unregister(index, player)
+        if (registered) coordinator.unregister(index, control)
         player.destroy()
+        countPlayerWork('destroyed')
       }
     }
   }, [video, index, coordinator, attempt])
 
   return <>
     <div className="player-surface" ref={host} />
-    <div className="player-status" role="status" aria-live="polite">
+    <div className="player-status" data-actionable={Boolean(error || slow || ((blocked || canRequestPlay) && coordinator.canPlay(index)))} role="status" aria-live="polite">
       <span>{error ?? (slow ? '動画の読み込みが長引いています。再読み込みか次へをお試しください。' : status)}</span>
       {(error || slow) ? <button onClick={() => setAttempt(n => n + 1)}>{error ? '再試行' : '再読み込み'}</button>
         : (blocked || canRequestPlay) && <button disabled={!coordinator.canPlay(index)} onClick={() => coordinator.play(index)}>再生する</button>}

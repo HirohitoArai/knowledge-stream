@@ -13,6 +13,9 @@ class FakePlayer {
   iframe = document.createElement('iframe')
   pauseVideo = vi.fn()
   playVideo = vi.fn()
+  stopVideo = vi.fn()
+  cueVideoById = vi.fn()
+  loadVideoById = vi.fn()
   mute = vi.fn()
   unMute = vi.fn()
   destroy = vi.fn(() => {
@@ -174,4 +177,28 @@ it('offers manual play after ready even when no autoplay-blocked event arrives',
   instances[0].playVideo.mockClear()
   fireEvent.click(screen.getByRole('button', { name: '再生する' }))
   expect(instances[0].playVideo).toHaveBeenCalledOnce()
+})
+
+it('reuses the iframe while stopping media outside the load window, including late ready', async () => {
+  const coordinator = new PlaybackCoordinator()
+  const view = render(<YouTubePlayer video={testVideos[0]} index={0} coordinator={coordinator} load={false} />)
+  await flush()
+  act(() => instances[0].ready())
+  expect(instances[0].stopVideo).toHaveBeenCalledOnce()
+  for (let i = 0; i < 30; i++) {
+    coordinator.setActive(0)
+    view.rerender(<YouTubePlayer video={testVideos[0]} index={0} coordinator={coordinator} />)
+    expect(instances[0].loadVideoById).toHaveBeenCalledTimes(i + 1)
+    coordinator.setActive(null)
+    view.rerender(<YouTubePlayer video={testVideos[0]} index={0} coordinator={coordinator} load={false} />)
+  }
+  expect(instances).toHaveLength(1)
+  expect(instances[0].cueVideoById).not.toHaveBeenCalled()
+  expect(instances[0].playVideo).not.toHaveBeenCalled()
+  expect(instances[0].loadVideoById).toHaveBeenLastCalledWith(testVideos[0].externalVideoId)
+  expect(instances[0].stopVideo).toHaveBeenCalledTimes(31)
+  expect(instances[0].destroy).not.toHaveBeenCalled()
+  view.unmount()
+  expect(instances[0].destroy).toHaveBeenCalledOnce()
+  expect(vi.getTimerCount()).toBe(0)
 })

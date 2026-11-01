@@ -1,10 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { PlaybackCoordinator } from '../src/player/PlaybackCoordinator'
-import { inMountWindow, selectActive } from '../src/player/visibility'
+import { inMountWindow, retainedPlayers, selectActive } from '../src/player/visibility'
 
 const player = () => ({ pauseVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn(), playVideo: vi.fn() })
 
 describe('visibility and mount window', () => {
+  it('bounds reuse at three while always keeping the entire media load window', () => {
+    let retained: number[] = []
+    for (const center of [0, 1, 2, 3, 4, 3, 2, 1, 0]) {
+      retained = retainedPlayers(center, 5, retained)
+      expect(retained.length).toBeLessThanOrEqual(3)
+      for (let i = 0; i < 5; i++) if (inMountWindow(i, center)) expect(retained).toContain(i)
+    }
+    expect(retainedPlayers(4, 5, retained, false)).toEqual([4])
+  })
   it('has no active video between snaps or with a clipped player', () => {
     expect(selectActive([{ index: 0, cardRatio: .64, playerRatio: 1 }, { index: 1, cardRatio: .36, playerRatio: 1 }])).toBeNull()
     expect(selectActive([{ index: 0, cardRatio: 1, playerRatio: .49 }])).toBeNull()
@@ -35,34 +44,14 @@ describe('playback ownership', () => {
     coordinator.unregister(0, first); coordinator.setVisible(true); coordinator.play(0)
     expect(first.playVideo).toHaveBeenCalledOnce()
   })
-  it('only changes audio for the current visible ready player without restarting playback', () => {
-    const coordinator = new PlaybackCoordinator(), current = player(), next = player()
-    coordinator.setActive(0)
-    coordinator.setMuted(0, false) // No ready player yet.
-    coordinator.register(0, current); coordinator.register(1, next)
-    current.playVideo.mockClear(); current.mute.mockClear()
-    coordinator.setMuted(0, false)
-    expect(current.unMute).toHaveBeenCalledTimes(2)
-    expect(current.playVideo).not.toHaveBeenCalled()
-    coordinator.setMuted(0, true)
-    expect(current.mute).toHaveBeenCalledOnce()
-    coordinator.setMuted(1, false)
-    expect(next.unMute).not.toHaveBeenCalled()
-    coordinator.setVisible(false)
-    coordinator.setMuted(0, false)
-    expect(current.unMute).toHaveBeenCalledTimes(2)
-  })
-  it('rejects stale audio actions and carries the external audio choice across navigation and return', () => {
-    const coordinator = new PlaybackCoordinator(), first = player(), next = player()
-    coordinator.register(0, first); coordinator.register(1, next)
-    coordinator.setActive(0); coordinator.setMuted(0, true)
-    coordinator.setActive(1); coordinator.setMuted(0, false)
-    expect(first.unMute).toHaveBeenCalledOnce()
-    expect(next.mute).toHaveBeenCalledOnce()
-    coordinator.setActive(0)
-    expect(first.mute).toHaveBeenCalledTimes(2)
-    coordinator.unregister(0, first); coordinator.setMuted(0, false)
-    expect(first.unMute).toHaveBeenCalledOnce()
+  it('requests sound on at each explicit or automatic start', () => {
+    const coordinator = new PlaybackCoordinator(), current = player()
+    coordinator.setActive(0); coordinator.register(0, current)
+    expect(current.unMute).toHaveBeenCalledOnce()
+    coordinator.setActive(null); coordinator.setActive(0); coordinator.play(0)
+    coordinator.unregister(0, current); coordinator.register(0, current)
+    expect(current.unMute).toHaveBeenCalledTimes(4)
+    expect(current.mute).not.toHaveBeenCalled()
   })
   it('pauses the previous player before requesting sound-on autoplay of the next', () => {
     const coordinator = new PlaybackCoordinator(), first = player(), next = player()

@@ -6,46 +6,44 @@ button { font: inherit; min-height: 44px; cursor: pointer; color: inherit; backg
 button:disabled { cursor: default; opacity: .45; }
 button:focus-visible, a:focus-visible, main:focus-visible { outline: 3px solid #a8ecd3; outline-offset: -3px; }
 a { color: #a8ecd3; }
-.app-shell { height: 100vh; height: 100dvh; min-height: 620px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; max-width: 1100px; margin: auto; }
+.app-shell { height: 100vh; height: 100dvh; min-height: 400px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; max-width: 1100px; margin: auto; }
 .app-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 22px 12px; border-bottom: 1px solid #2d424b; }
 .eyebrow { color: #a8ecd3; letter-spacing: .12em; font-size: 10px; font-weight: 700; margin: 0; }
 h1 { font-size: 19px; letter-spacing: -.03em; margin: 5px 0 0; }
 h1 span { color: #9dafb7; font-size: 12px; font-weight: 400; letter-spacing: 0; }
 .api-status { font-size: 10px; color: #9dafb7; }
 .feed { overflow-y: auto; scroll-snap-type: y mandatory; overscroll-behavior-y: contain; min-height: 0; scrollbar-width: thin; }
-.video-card { min-height: 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6px 12px; gap: 6px; }
-.video-meta, .player-slot { width: min(100%, 480px); }
+.video-card { position: relative; min-height: 100%; height: 100%; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0; gap: 0; }
+.video-meta { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.player-slot { width: min(100%, 540px); }
 .video-meta .eyebrow span { color: #8399a2; }
 h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 .video-meta p { margin: 0; color: #9dafb7; font-size: 10px; }
-.player-slot { min-height: 248px; flex: 1; container-type: size; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-/* Fit the whole iframe at 9:16 inside the remaining card area, including status space.
-   A short viewport can require a wider-than-9:16 iframe to keep YouTube's 200px minimum.
-   YouTube letterboxes the video; we never crop, scale, or cover its controls. */
-.player-surface { --portrait-height: min(calc(100cqh - 48px), calc(100cqw * 16 / 9), 640px); height: max(200px, var(--portrait-height)); width: max(200px, calc(var(--portrait-height) * 9 / 16)); flex: none; background: #000; }
-.player-surface iframe { display: block; width: 100%; height: 100%; border: 0; }
+.player-slot { min-height: 200px; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+/* Give the official iframe the available screen. YouTube fits the whole video;
+   no object-fit crop, scale transform, or independent overlay covers its UI. */
+.player-surface { position: relative; min-height: 200px; width: 100%; flex: 1; background: #000; }
+.player-surface iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; }
 .placeholder { display: grid; place-items: center; color: #91a5ae; font-size: 12px; padding: 16px; }
 .player-status { width: 100%; min-height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #b5c5cc; padding-top: 4px; }
+.player-status[data-actionable="false"] { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; overflow: hidden; clip-path: inset(50%); }
 .player-status button { flex-shrink: 0; font-size: 11px; padding: 5px 10px; }
-.youtube-link { font-size: 11px; align-self: center; min-height: 28px; display: flex; align-items: center; }
-.video-actions { display: flex; align-items: center; justify-content: center; gap: 12px; flex: none; }
-.video-actions > div { display: flex; gap: 6px; }
-.video-actions button { font-size: 11px; padding: 6px 10px; }
-.feed-controls { border-top: 1px solid #2d424b; padding: 6px 20px; }
-.feed-controls > div { display: flex; align-items: center; justify-content: space-between; max-width: 440px; margin: auto; }
+.youtube-link { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.current-video { min-width: 0; text-align: center; }
+.feed-controls { border-top: 1px solid #2d424b; padding: 0 8px; }
+.feed-controls > div { display: flex; align-items: center; justify-content: space-between; max-width: 540px; margin: auto; gap: 8px; }
+.feed-controls button { flex-shrink: 0; padding: 6px 12px; border-radius: 0; border: 0; background: transparent; }
 .feed-controls span { color: #b5c5cc; font-size: 12px; font-variant-numeric: tabular-nums; }
-.bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); background: #15252d; border-top: 1px solid #2d424b; padding: 6px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); }
+.bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); background: #15252d; border-top: 1px solid #2d424b; padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }
 .bottom-nav button { border: none; background: transparent; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 4px; font-size: 12px; }
 .bottom-nav button[aria-current] { color: #a8ecd3; background: #233c43; }
 .bottom-nav small { font-size: 9px; }
 .empty-state { padding: 40px 20px; }
-@media (max-width: 480px) {
-  h1 span, .app-header .eyebrow { display: none; }
-  h1 { font-size: 17px; margin: 0; }
-  .app-header { padding: max(8px, env(safe-area-inset-top)) 12px 8px; }
-  .video-card { padding-inline: 10px; }
-  .bottom-nav { padding-top: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
-  .bottom-nav button { flex-wrap: wrap; gap: 4px; }
+@media (max-width: 600px) {
+  .app-header { display: none; }
+  .app-shell { grid-template-rows: minmax(0, 1fr) auto auto; padding-top: env(safe-area-inset-top); }
+  .player-slot { width: 100%; }
   .bottom-nav small { display: none; }
+  .bottom-nav button { min-height: 44px; padding: 4px; }
 }
-@media (max-height: 619px) { .app-shell { min-height: 620px; } .feed { scroll-snap-type: y proximity; } }
+@media (max-height: 399px) { .feed { scroll-snap-type: y proximity; } }
