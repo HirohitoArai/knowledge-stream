@@ -12,7 +12,13 @@
 
 型チェック・build・52テスト成功。PCの12回往復後も生成数は3個のまま、戻った動画の再生を確認。**再生成の削減は確認済みですが、PC/iPhoneで報告された長時間の重さの完全解消、iPhoneの最新表示、初回からの音声付き自動再生は保証・確認していません。** [変更と検証記録](docs/PHASE1_5_SHORTS.md)を参照してください。
 
-固定の3動画を公式YouTube IFrame Player APIで表示します。検索・プロフィールは非活性タブの配置のみ。D1、管理画面、評価・検索・フィードAPI、履歴保存、ジャンル選択は実装していません。本番デプロイ・Cloudflareアカウント操作・秘密情報の登録は実施していません。
+固定の3動画を公式YouTube IFrame Player APIで表示します。プロフィールはプレースホルダのみ。管理画面、評価・フィードAPI、履歴保存、ジャンル選択は実装していません。本番デプロイ・Cloudflareアカウント操作・秘密情報の登録は実施していません。
+
+### 検索機能（SPEC §2.4準拠）を追加 — feature/search-spec（2026-11-03）
+
+`feature/search-spec`ブランチで、検索をSPEC §2.4のとおりサーバー側で実装しました。根拠はSPEC §2.4と、Lukeの2026-09-25の#やることリスト投稿（「検索はまずは部分一致で」、下部ツールバーに動画・検索・プロフィール）のみです。D1（`migrations/`のGit管理マイグレーション＋ローカル用seed）、`GET /api/v1/search`（有効な登録動画のみを対象に、独自label・search_keywords・ジャンル名へ部分一致。サーバー側で検証し、SQLはバインド値＋LIKEエスケープ）、検索タブの有効化と結果タップで動画タブを開く接続までを含みます。型チェック・build・70テスト成功、ローカルD1＋workerdでの実打確認済み。実機での見た目は未確認です。詳細と導入手順は[引き継ぎ文書](docs/SEARCH_SPEC_HANDOFF.md)を参照してください。
+
+なお `feature/search-skeleton` は、実在しなかった「2026-11-02の決定」を前提に作った破棄案です（端末側フィルタ方式）。取り込まないでください。
 
 ## ローカル起動
 
@@ -39,7 +45,7 @@ pnpm preview:lan
 # 同じWi-FiのiPhoneから http://<PCのWi-Fi IPv4>:4174
 ```
 
-Cloudflareへのログイン・APIキー・D1は不要です。`pnpm dev` / `pnpm preview` はローカルworkerdを使用します。`pnpm-workspace.yaml`は公式ツールチェーンのesbuild/workerdのインストールスクリプトだけ許可しています。デプロイ用スクリプトは追加していません。
+Cloudflareへのログイン・APIキーなしで起動できます（検索機能の確認には下記のローカルD1へのmigration/seed適用が必要です）。`pnpm dev` / `pnpm preview` はローカルworkerdを使用します。`pnpm-workspace.yaml`は公式ツールチェーンのesbuild/workerdのインストールスクリプトだけ許可しています。デプロイ用スクリプトは追加していません。
 
 書き込み制限のある環境では、Wranglerのログを作業フォルダ内へ向けてください（PowerShell）:
 
@@ -49,10 +55,23 @@ $env:WRANGLER_SEND_METRICS = 'false'
 pnpm dev
 ```
 
+### 検索機能のローカル確認（D1）
+
+`feature/search-spec`では検索がローカルD1を参照します。初回だけ、マイグレーションとサンプルデータ（`src/videos.ts`の3本＋無効化済み検証用1本）をローカルDBへ適用してください。
+
+```sh
+pnpm exec wrangler d1 migrations apply knowledge-stream --local
+pnpm exec wrangler d1 execute knowledge-stream --local --file=seeds/0001_local_sample_videos.sql
+pnpm build && pnpm preview
+curl 'http://localhost:4173/api/v1/search?q=ピザ'
+```
+
+seedはローカル開発専用です。実環境では環境ごとにD1を作成し、`wrangler.jsonc`の`database_id`を差し替えます。詳細は[引き継ぎ文書](docs/SEARCH_SPEC_HANDOFF.md)を参照してください。
+
 ## Phase 1の構成と操作
 
 - [Cloudflare公式React + Vite構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/)に準じ、`src/`がReact SPA、`worker/index.ts`が単一API Worker。`@cloudflare/vite-plugin`、`wrangler.jsonc`のStatic Assets SPA fallback、`/api/*`のWorker優先ルーティングを使用。
-- `GET /api/v1/health`だけを実装し、共有DTOは`shared/api.ts`。その他のAPIはJSON 404。管理APIの認証は未実装で、管理処理自体が存在しません。
+- `GET /api/v1/health`と、検索ブランチでは`GET /api/v1/search`（D1＋共有DTOは`shared/api.ts`）を実装。その他のAPIはJSON 404。管理APIの認証は未実装で、管理処理自体が存在しません。
 - `compatibility_date`は同梱workerdで起動確認した`2026-10-01`に固定。作業日の`2026-10-15`はこのworkerdの対応上限を超えたため採用していません。
 - CSS `scroll-snap`が位置合わせを担当。TypeScriptはカードの表示面積65%以上かつプレーヤー表示面積50%以上でactiveを決定。切替途中で条件を満たさないと全停止します。
 - `PlaybackCoordinator`は旧プレーヤーの停止→新プレーヤーの音声付き自動再生要求の順を管理。遅れて届くready/再生イベントでも対象を再確認し、非activeの再生を停止。非表示タブでも停止します。
@@ -110,6 +129,7 @@ pnpm dev
 次の手順はDraft PRのレビューと上記実機チェック。Phase 2以降は別依頼として着手します。
 
 ## 開発ドキュメント
+- [検索機能（SPEC §2.4準拠）引き継ぎ — feature/search-spec](docs/SEARCH_SPEC_HANDOFF.md)
 - [Phase 1.5 Shortsのコード変更・検証記録](docs/PHASE1_5_SHORTS.md)
 - [iPhone Safari・同じWi-Fiでの検証手順](docs/IPHONE_SAFARI_QA.md)
 - [Phase 1 コードガイド・共有／復元手順](docs/PHASE1_CODE_GUIDE.md)
@@ -127,7 +147,7 @@ pnpm dev
 - [#6 QA/バックアップ/完成判定](../../issues/6)
 
 ## 採用技術
-React + TypeScript + Vite、Cloudflare Workers + Static Assets、YouTube IFrame Player API。Cloudflare D1は将来Phaseの計画のみ。YouTube動画本体は取得・保存・再配信しない。
+React + TypeScript + Vite、Cloudflare Workers + Static Assets、YouTube IFrame Player API。Cloudflare D1は検索ブランチ（feature/search-spec）から検索用に使用。YouTube動画本体は取得・保存・再配信しない。
 
 ## 主要原則
 - ユーザー側にログイン不要、管理画面だけCloudflare Accessで保護
