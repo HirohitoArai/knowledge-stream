@@ -39,6 +39,21 @@ h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 .bottom-nav button[aria-current] { color: #a8ecd3; background: #233c43; }
 .bottom-nav small { font-size: 9px; }
 .empty-state { padding: 40px 20px; }
+.search-view { overflow-y: auto; min-height: 0; padding: 20px 16px 32px; }
+.search-form { max-width: 540px; margin: 0 auto; }
+.search-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.search-row { display: flex; gap: 8px; }
+.search-row input { flex: 1; min-width: 0; min-height: 44px; font: inherit; color: inherit; background: #0c151a; border: 1px solid #45616a; border-radius: 8px; padding: 8px 12px; }
+.search-row input:focus-visible { outline: 3px solid #a8ecd3; outline-offset: -3px; }
+.search-note { color: #9dafb7; font-size: 11px; margin: 8px 0 0; }
+.search-status { max-width: 540px; margin: 20px auto 0; color: #b5c5cc; font-size: 13px; }
+.search-results { list-style: none; margin: 16px auto 0; padding: 0; max-width: 540px; display: flex; flex-direction: column; gap: 8px; }
+.search-result { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; }
+.search-result-label { font-size: 14px; }
+.search-result-categories { font-size: 11px; color: #a8ecd3; }
+.profile-placeholder { overflow-y: auto; min-height: 0; padding: 20px 16px 32px; }
+.profile-placeholder > * { max-width: 540px; margin-left: auto; margin-right: auto; }
+.profile-placeholder p { color: #b5c5cc; font-size: 13px; }
 @media (max-width: 600px) {
   .app-header { display: none; }
   .app-shell { grid-template-rows: minmax(0, 1fr) auto auto; padding-top: env(safe-area-inset-top); }

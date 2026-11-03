@@ -5,7 +5,13 @@ import { YouTubePlayer } from './player/YouTubePlayer'
 import type { TestVideo } from './videos'
 import { countPlayerWork } from './player/diagnostics'
 
-export function VideoFeed({ videos, preloadAdjacent = true }: { videos: TestVideo[]; preloadAdjacent?: boolean }) {
+export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId, focusNonce }: {
+  videos: TestVideo[]
+  preloadAdjacent?: boolean
+  /** When set (with a fresh focusNonce), scroll the feed to this video. */
+  focusExternalVideoId?: string
+  focusNonce?: number
+}) {
   const viewport = useRef<HTMLDivElement>(null)
   const measureNow = useRef<(() => void) | null>(null)
   const [coordinator] = useState(() => new PlaybackCoordinator())
@@ -82,6 +88,19 @@ export function VideoFeed({ videos, preloadAdjacent = true }: { videos: TestVide
     // Visibility still gates playback; Safari/YouTube may still reject sound-on autoplay.
     measureNow.current?.()
   }
+
+  // Search results open a video here by its YouTube external id. A video that
+  // is not part of this feed list simply leaves the feed where it is.
+  const handledFocusNonce = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    if (!focusExternalVideoId || focusNonce === undefined) return
+    if (handledFocusNonce.current === focusNonce) return
+    handledFocusNonce.current = focusNonce
+    const index = videos.findIndex(video => video.externalVideoId === focusExternalVideoId)
+    if (index >= 0) navigate(index)
+    // navigate is recreated per render; the nonce guard above is the trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusExternalVideoId, focusNonce, videos])
 
   if (!videos.length) return <main className="empty-state">テスト動画がありません。動画データを確認してください。</main>
 
