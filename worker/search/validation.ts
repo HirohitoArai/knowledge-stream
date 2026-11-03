@@ -37,7 +37,7 @@ export function validateQuery(raw: string | null): QueryValidation {
  * never make the server return an unbounded result set.
  */
 export function parseLimit(raw: string | null): number {
-  if (raw === null) return DEFAULT_LIMIT
+  if (raw === null || raw.trim() === '') return DEFAULT_LIMIT
   const value = Number(raw)
   if (!Number.isFinite(value)) return DEFAULT_LIMIT
   return Math.min(MAX_LIMIT, Math.max(1, Math.trunc(value)))
