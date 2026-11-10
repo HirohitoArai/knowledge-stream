@@ -54,6 +54,24 @@ h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 .profile-placeholder { overflow-y: auto; min-height: 0; padding: 20px 16px 32px; }
 .profile-placeholder > * { max-width: 540px; margin-left: auto; margin-right: auto; }
 .profile-placeholder p { color: #b5c5cc; font-size: 13px; }
+.genre-gate { overflow-y: auto; min-height: 0; padding: 24px 16px 32px; }
+.genre-gate > * { max-width: 540px; margin-left: auto; margin-right: auto; }
+.genre-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.genre-chip { border: 1px solid #45616a; border-radius: 999px; padding: 10px 16px; background: #0c151a; color: inherit; font: inherit; font-size: 14px; }
+.genre-chip[aria-pressed="true"] { background: #233c43; border-color: #a8ecd3; color: #a8ecd3; }
+.primary-button { min-height: 44px; padding: 10px 20px; border-radius: 8px; border: none; background: #a8ecd3; color: #0c151a; font: inherit; font-weight: 700; }
+.primary-button:disabled { opacity: 0.45; }
+.video-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 2px 0; }
+.video-actions button { border: 1px solid #45616a; background: #15252d; color: inherit; border-radius: 999px; padding: 6px 12px; font-size: 12px; }
+.video-actions button[aria-pressed="true"] { border-color: #a8ecd3; color: #a8ecd3; }
+.video-actions button:disabled { opacity: 0.55; }
+.video-action-notice { font-size: 11px; color: #a8ecd3; }
+.profile-view { overflow-y: auto; min-height: 0; padding: 20px 16px 32px; }
+.profile-view > section { max-width: 540px; margin: 0 auto 28px; }
+.profile-note { color: #b5c5cc; font-size: 13px; line-height: 1.6; }
+.saved-list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.danger-zone { display: flex; flex-wrap: wrap; gap: 8px; }
+.danger-zone button { border: 1px solid #7a4a4a; background: #2d1a1a; color: #f0c9c9; border-radius: 8px; padding: 8px 12px; font-size: 12px; }
 @media (max-width: 600px) {
   .app-header { display: none; }
   .app-shell { grid-template-rows: minmax(0, 1fr) auto auto; padding-top: env(safe-area-inset-top); }

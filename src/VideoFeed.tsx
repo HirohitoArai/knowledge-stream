@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { PlaybackCoordinator } from './player/PlaybackCoordinator'
 import { inMountWindow, retainedPlayers, selectActive, visibleRatio } from './player/visibility'
 import { YouTubePlayer } from './player/YouTubePlayer'
 import type { TestVideo } from './videos'
 import { countPlayerWork } from './player/diagnostics'
 
-export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId, focusNonce }: {
+export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId, focusNonce, onActiveVideo, renderCardExtras }: {
   videos: TestVideo[]
   preloadAdjacent?: boolean
   /** When set (with a fresh focusNonce), scroll the feed to this video. */
   focusExternalVideoId?: string
   focusNonce?: number
+  /** Called with the internal id when the active (playing) video changes. */
+  onActiveVideo?: (videoId: string) => void
+  /** Extra per-video UI (save / not interested / feedback) under the player. */
+  renderCardExtras?: (video: TestVideo) => ReactNode
 }) {
   const viewport = useRef<HTMLDivElement>(null)
   const measureNow = useRef<(() => void) | null>(null)
@@ -89,6 +94,18 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
     measureNow.current?.()
   }
 
+  // Report activations upward (SPEC section 3: a video counts as viewed
+  // when it becomes the active one). Playback authority stays here; this is
+  // only a notification, keyed by internal id.
+  const lastReportedActive = useRef<string | null>(null)
+  useEffect(() => {
+    if (active === null || !onActiveVideo) return
+    const videoId = videos[active]?.id
+    if (!videoId || lastReportedActive.current === videoId) return
+    lastReportedActive.current = videoId
+    onActiveVideo(videoId)
+  }, [active, videos, onActiveVideo])
+
   // Search results open a video here by its YouTube external id. A video that
   // is not part of this feed list simply leaves the feed where it is.
   const handledFocusNonce = useRef<number | undefined>(undefined)
@@ -102,13 +119,13 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusExternalVideoId, focusNonce, videos])
 
-  if (!videos.length) return <main className="empty-state">テスト動画がありません。動画データを確認してください。</main>
+  if (!videos.length) return <main className="empty-state">表示できる動画がありません。ジャンル選択や登録動画を確認してください。</main>
 
   return <>
     <main className="feed" ref={viewport} aria-label="動画フィード" tabIndex={0}>
       {videos.map((video, index) => <article key={video.id} className="video-card" aria-label={`${index + 1}本目: ${video.label}`} data-active={active === index}>
         <div className="video-meta">
-          <span className="eyebrow">{video.category} <span> / {String(index + 1).padStart(2, '0')} · 独自ラベル</span></span>
+          <span className="eyebrow">{video.categories.length > 0 ? video.categories.join(' / ') : 'ジャンル未設定'} <span> / {String(index + 1).padStart(2, '0')} · 独自ラベル</span></span>
           <h2>{video.label}</h2>
         </div>
         <div className="player-slot">
@@ -116,6 +133,7 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
             ? <YouTubePlayer video={video} index={index} coordinator={coordinator} load={preloadAdjacent ? inMountWindow(index, center) : index === center} />
             : <><div className="player-surface placeholder">近づくとプレーヤーを読み込みます</div><div className="player-status" /></>}
         </div>
+        {renderCardExtras?.(video)}
       </article>)}
     </main>
     <section className="feed-controls" aria-label="動画の切り替え">
