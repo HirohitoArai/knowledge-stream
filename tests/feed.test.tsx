@@ -95,6 +95,24 @@ it('wraps from the last card back to the first and from the first to the last', 
   expect(screen.getByText('1 / 3')).toBeTruthy()
 })
 
+it('wraps with the wheel at the feed edges', () => {
+  render(<VideoFeed videos={testVideos} />)
+  const feed = screen.getByRole('main', { name: '動画フィード' })
+  Object.defineProperties(feed, {
+    scrollHeight: { value: 1800, configurable: true },
+    clientHeight: { value: 600, configurable: true },
+  })
+  const nowSpy = vi.spyOn(performance, 'now').mockReturnValue(1000)
+  feed.scrollTop = 1200 // bottom edge (3 cards x 600)
+  fireEvent.wheel(feed, { deltaY: 120 })
+  expect(players.get(0)!.playVideo).toHaveBeenCalledTimes(2)
+  nowSpy.mockReturnValue(2000) // past the wheel lock window
+  feed.scrollTop = 0 // top edge
+  fireEvent.wheel(feed, { deltaY: -120 })
+  expect(players.get(2)!.playVideo).toHaveBeenCalled()
+  nowSpy.mockRestore()
+})
+
 it('toggles playback when the video surface is tapped', () => {
   render(<VideoFeed videos={testVideos} />)
   const first = players.get(0)!

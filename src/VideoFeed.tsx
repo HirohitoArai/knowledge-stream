@@ -155,6 +155,21 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
     }
   }
 
+  // Desktop wheel at the feed edges: native scrolling stops at the first /
+  // last card, so wrap around from the wheel handler (with a short lock so
+  // one wheel gesture wraps once).
+  const wheelLock = useRef(0)
+  const onFeedWheel = (event: React.WheelEvent<HTMLElement>) => {
+    const root = viewport.current
+    if (!root || videos.length < 2) return
+    const now = performance.now()
+    if (now - wheelLock.current < 600) return
+    const atBottom = root.scrollTop + root.clientHeight >= root.scrollHeight - 2
+    const atTop = root.scrollTop <= 0
+    if (atBottom && event.deltaY > 0) { wheelLock.current = now; navigate(0) }
+    else if (atTop && event.deltaY < 0) { wheelLock.current = now; navigate(videos.length - 1) }
+  }
+
   const onFeedKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'PageDown') {
       event.preventDefault(); navigate((center + 1) % videos.length)
@@ -191,7 +206,7 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
   if (!videos.length) return <main className="empty-state">表示できる動画がありません。ジャンル選択や登録動画を確認してください。</main>
 
   return <>
-    <main className="feed" ref={viewport} aria-label="動画フィード" tabIndex={0} onKeyDown={onFeedKeyDown}>
+    <main className="feed" ref={viewport} aria-label="動画フィード" tabIndex={0} onKeyDown={onFeedKeyDown} onWheel={onFeedWheel}>
       {videos.map((video, index) => <article key={video.id} className="video-card" aria-label={`${index + 1}本目: ${video.label}`} data-active={active === index}
         onPointerDown={event => onCardPointerDown(event, index)}
         onPointerMove={onCardPointerMove}

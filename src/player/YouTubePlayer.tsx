@@ -140,6 +140,10 @@ export function YouTubePlayer({ video, index, coordinator, load = true }: {
         })
         player.getIframe().title = `${video.label} — YouTubeプレーヤー`
         player.getIframe().setAttribute('referrerpolicy', 'strict-origin-when-cross-origin')
+        // Delegate the page's user activation to the player so gesture-driven
+        // play requests (feed start click, swipes) can start with sound where
+        // the browser's autoplay policy allows delegation.
+        player.getIframe().setAttribute('allow', 'accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture; web-share')
       }).catch(() => {
         if (!cancelled) setError('YouTubeを読み込めません。通信やコンテンツブロッカーを確認してください。')
       })
