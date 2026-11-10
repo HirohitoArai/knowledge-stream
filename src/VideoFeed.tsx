@@ -145,7 +145,9 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
     const dy = event.clientY - current.startY
     if (current.mode === 'scroll') {
       const step = dy <= -48 ? 1 : dy >= 48 ? -1 : 0
-      navigate(Math.min(videos.length - 1, Math.max(0, current.index + step)))
+      // The feed has no end: past the last card wraps to the first and back.
+      const target = ((current.index + step) % videos.length + videos.length) % videos.length
+      navigate(target)
     } else if (current.mode === 'pending'
       && performance.now() - current.startedAt < 600
       && (event.target as HTMLElement).classList.contains('gesture-layer')) {
@@ -155,9 +157,9 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
 
   const onFeedKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'PageDown') {
-      event.preventDefault(); navigate(Math.min(videos.length - 1, center + 1))
+      event.preventDefault(); navigate((center + 1) % videos.length)
     } else if (event.key === 'ArrowUp' || event.key === 'PageUp') {
-      event.preventDefault(); navigate(Math.max(0, center - 1))
+      event.preventDefault(); navigate((center - 1 + videos.length) % videos.length)
     }
   }
 

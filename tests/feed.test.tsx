@@ -85,6 +85,16 @@ it('does not authorize the target when scrolling fails to make it visible', () =
   expect(players.get(1)!.playVideo).not.toHaveBeenCalled()
 })
 
+it('wraps from the last card back to the first and from the first to the last', () => {
+  render(<VideoFeed videos={testVideos} />)
+  swipe(0, 100, 500) // down on the first card wraps to the last
+  expect(players.get(2)!.playVideo).toHaveBeenCalledOnce()
+  expect(screen.getByText('3 / 3')).toBeTruthy()
+  swipe(2, 500, 100) // up on the last card wraps to the first
+  expect(players.get(0)!.playVideo).toHaveBeenCalledTimes(2) // initial activation + wrap return
+  expect(screen.getByText('1 / 3')).toBeTruthy()
+})
+
 it('toggles playback when the video surface is tapped', () => {
   render(<VideoFeed videos={testVideos} />)
   const first = players.get(0)!
