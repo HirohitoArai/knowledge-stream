@@ -12,13 +12,17 @@
 
 型チェック・build・52テスト成功。PCの12回往復後も生成数は3個のまま、戻った動画の再生を確認。**再生成の削減は確認済みですが、PC/iPhoneで報告された長時間の重さの完全解消、iPhoneの最新表示、初回からの音声付き自動再生は保証・確認していません。** [変更と検証記録](docs/PHASE1_5_SHORTS.md)を参照してください。
 
-固定の3動画を公式YouTube IFrame Player APIで表示します。プロフィールはプレースホルダのみ。管理画面、評価・フィードAPI、履歴保存、ジャンル選択は実装していません。本番デプロイ・Cloudflareアカウント操作・秘密情報の登録は実施していません。
+固定の3動画を公式YouTube IFrame Player APIで表示します。プロフィールはプレースホルダのみ。管理画面、評価・フィードAPI、履歴保存、ジャンル選択はこのブランチ（feature/phase-1-player-spike）では実装していません（後述の feature/full-prototype で実装済み）。本番デプロイ・Cloudflareアカウント操作・秘密情報の登録は実施していません。
 
 ### 検索機能（SPEC §2.4準拠）を追加 — feature/search-spec（2026-11-03）
 
 `feature/search-spec`ブランチで、検索をSPEC §2.4のとおりサーバー側で実装しました。根拠はSPEC §2.4と、Lukeの2026-09-25の#やることリスト投稿（「検索はまずは部分一致で」、下部ツールバーに動画・検索・プロフィール）のみです。D1（`migrations/`のGit管理マイグレーション＋ローカル用seed）、`GET /api/v1/search`（有効な登録動画のみを対象に、独自label・search_keywords・ジャンル名へ部分一致。サーバー側で検証し、SQLはバインド値＋LIKEエスケープ）、検索タブの有効化と結果タップで動画タブを開く接続までを含みます。型チェック・build・70テスト成功、ローカルD1＋workerdでの実打確認済み。実機での見た目は未確認です。詳細と導入手順は[引き継ぎ文書](docs/SEARCH_SPEC_HANDOFF.md)を参照してください。
 
 なお `feature/search-skeleton` は、実在しなかった「2026-11-02の決定」を前提に作った破棄案です（端末側フィルタ方式）。取り込まないでください。
+
+### 主要機能をすべて実装 — feature/full-prototype（2026-11-10）
+
+`feature/full-prototype`ブランチ（`feature/search-spec`の上に構築）で、SPEC v0.2の完成条件に対応する主要機能をすべて実装しました。初回のジャンル複数選択→フィード表示（以降は直接フィード）、フィードAPI（`GET /api/v1/feed`）とジャンルAPI、active化での視聴済み記録と未視聴優先の並び順（端末内状態はLocalStorageの単一ラッパーで管理）、動画ごとの保存・興味なし（端末内）と「役立った／分類が違う」（匿名・HMAC化してサーバー保存、重複防止と頻度制限つき）、プロフィールタブ（ジャンル変更・保存リスト・端末内データ削除・プライバシー要約）、管理画面`/admin`と管理API（Cloudflare AccessのJWTを全検証し、失敗時は処理しないfail-closed。動画・ジャンルのCRUDと重複時の409）。プレーヤー本体はPhase 1.5のまま変更していません。実環境へのデプロイ、実D1・Accessの作成、シークレット登録は未実施です。詳細・判断点・未確認事項は[引き継ぎ文書](docs/FULL_PROTOTYPE_HANDOFF.md)と[プライバシー文書](docs/PRIVACY.md)を参照してください。
 
 ## ローカル起動
 
@@ -71,7 +75,7 @@ seedはローカル開発専用です。実環境では環境ごとにD1を作�
 ## Phase 1の構成と操作
 
 - [Cloudflare公式React + Vite構成](https://developers.cloudflare.com/workers/framework-guides/web-apps/react/)に準じ、`src/`がReact SPA、`worker/index.ts`が単一API Worker。`@cloudflare/vite-plugin`、`wrangler.jsonc`のStatic Assets SPA fallback、`/api/*`のWorker優先ルーティングを使用。
-- `GET /api/v1/health`と、検索ブランチでは`GET /api/v1/search`（D1＋共有DTOは`shared/api.ts`）を実装。その他のAPIはJSON 404。管理APIの認証は未実装で、管理処理自体が存在しません。
+- `GET /api/v1/health`と、検索ブランチでは`GET /api/v1/search`（D1＋共有DTOは`shared/api.ts`）を実装。その他のAPIはJSON 404。管理APIの認証は未実装で、管理処理自体が存在しません（feature/full-prototype でフィード/評価/管理APIとAccess検証まで実装済み）。
 - `compatibility_date`は同梱workerdで起動確認した`2026-10-01`に固定。作業日の`2026-10-15`はこのworkerdの対応上限を超えたため採用していません。
 - CSS `scroll-snap`が位置合わせを担当。TypeScriptはカードの表示面積65%以上かつプレーヤー表示面積50%以上でactiveを決定。切替途中で条件を満たさないと全停止します。
 - `PlaybackCoordinator`は旧プレーヤーの停止→新プレーヤーの音声付き自動再生要求の順を管理。遅れて届くready/再生イベントでも対象を再確認し、非activeの再生を停止。非表示タブでも停止します。
@@ -79,7 +83,7 @@ seedはローカル開発専用です。実環境では環境ごとにD1を作�
 - iframe外の「前へ／次へ」は常設。動画外の余白をスクロールすることもできます。先頭・末尾の操作は非活性で、ループや次動画への自動送りはありません。
 - 自動再生は保証しません。拒否されたらYouTube標準の再生ボタンを押してください。初期設定は音声オン。標準の音声操作が見えない場合は動画下の「音声オン／音声オフ」を使えます。外側の選択はページ内の動画切り替え・復帰にも適用し、再読み込みで初期設定へ戻ります。APIロード/readyの15秒タイムアウト、再試行、埋め込み不可等のエラー案内をプレーヤー外に表示します。
 - 独自オーバーレイ・透明タッチ領域・プレーヤーのクロップはありません。3タブと前後操作はGridの別行、safe-areaを確保。200×200px以上を維持するため、高さ620px未満ではページ全体にもスクロールを許可します。
-- 視聴済みの永続化はPhase 2対象。このスパイクはLocalStorageへ書き込みません。
+- 視聴済みの永続化はPhase 2対象。このスパイクはLocalStorageへ書き込みません（feature/full-prototype では端末内状態として実装済み）。
 
 ## テスト動画と差し替え
 
@@ -129,6 +133,8 @@ seedはローカル開発専用です。実環境では環境ごとにD1を作�
 次の手順はDraft PRのレビューと上記実機チェック。Phase 2以降は別依頼として着手します。
 
 ## 開発ドキュメント
+- [主要機能の実装 引き継ぎ — feature/full-prototype](docs/FULL_PROTOTYPE_HANDOFF.md)
+- [プライバシーとデータの扱い](docs/PRIVACY.md)
 - [検索機能（SPEC §2.4準拠）引き継ぎ — feature/search-spec](docs/SEARCH_SPEC_HANDOFF.md)
 - [Phase 1.5 Shortsのコード変更・検証記録](docs/PHASE1_5_SHORTS.md)
 - [iPhone Safari・同じWi-Fiでの検証手順](docs/IPHONE_SAFARI_QA.md)
@@ -147,7 +153,7 @@ seedはローカル開発専用です。実環境では環境ごとにD1を作�
 - [#6 QA/バックアップ/完成判定](../../issues/6)
 
 ## 採用技術
-React + TypeScript + Vite、Cloudflare Workers + Static Assets、YouTube IFrame Player API。Cloudflare D1は検索ブランチ（feature/search-spec）から検索用に使用。YouTube動画本体は取得・保存・再配信しない。
+React + TypeScript + Vite、Cloudflare Workers + Static Assets、YouTube IFrame Player API。Cloudflare D1は検索ブランチ（feature/search-spec）から使用し、feature/full-prototype ではフィード・評価・管理まで拡張。YouTube動画本体は取得・保存・再配信しない。
 
 ## 主要原則
 - ユーザー側にログイン不要、管理画面だけCloudflare Accessで保護
