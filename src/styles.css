@@ -25,7 +25,6 @@ h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 .player-surface { position: relative; min-height: 200px; width: 100%; flex: 1; background: #000; }
 .player-wrap { position: relative; flex: 1; min-height: 200px; width: 100%; display: flex; }
 .gesture-layer { position: absolute; inset: 0; touch-action: none; }
-@media (pointer: fine) { .gesture-layer { display: none; } }
 .player-surface iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; }
 .placeholder { display: grid; place-items: center; color: #91a5ae; font-size: 12px; padding: 16px; }
 .player-status { width: 100%; min-height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #b5c5cc; padding-top: 4px; }

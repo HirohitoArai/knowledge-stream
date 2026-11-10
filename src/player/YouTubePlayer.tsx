@@ -161,10 +161,10 @@ export function YouTubePlayer({ video, index, coordinator, load = true }: {
   return <>
     <div className="player-wrap">
       <div className="player-surface" ref={host} />
-      {/* Touch gesture layer: the cross-origin iframe swallows touch gestures,
-          so vertical swipes for feed navigation and tap-to-toggle are handled
-          here via pointer events that bubble to the feed card. Mouse pointers
-          skip the layer (CSS) and keep the native YouTube UI. */}
+      {/* Gesture layer: the cross-origin iframe swallows touch and wheel
+          gestures, so vertical swipes/drags for feed navigation and
+          click/tap-to-toggle are handled here via pointer events that
+          bubble to the feed card. */}
       <div className="gesture-layer" aria-hidden="true" />
     </div>
     <div className="player-status" data-actionable={Boolean(error || slow || ((blocked || canRequestPlay) && coordinator.canPlay(index)))} role="status" aria-live="polite">
