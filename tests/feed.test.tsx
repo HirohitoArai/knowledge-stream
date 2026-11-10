@@ -10,7 +10,7 @@ vi.mock('../src/player/YouTubePlayer', async () => {
   const { createElement, useLayoutEffect, useState } = await import('react')
   return { YouTubePlayer: ({ index, coordinator, load }: { index: number; coordinator: PlaybackCoordinator; load: boolean }) => {
     const [player] = useState(() => {
-      const result = { pauseVideo: vi.fn(), playVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn() }
+      const result = { pauseVideo: vi.fn(), playVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn(), getPlayerState: vi.fn(() => 2 as number) }
       created.push(result)
       return result
     })
@@ -20,7 +20,9 @@ vi.mock('../src/player/YouTubePlayer', async () => {
       coordinator.register(index, player)
       return () => { coordinator.unregister(index, player); players.delete(index) }
     }, [index, coordinator, load, player])
-    return createElement('div', { className: 'player-surface' })
+    return createElement('div', { className: 'player-wrap' },
+      createElement('div', { className: 'player-surface' }),
+      createElement('div', { className: 'gesture-layer' }))
   } }
 })
 
@@ -40,7 +42,10 @@ beforeEach(() => {
     if (this.classList.contains('feed')) return new DOMRect(0, 0, 390, 600)
     const card = this.closest('.video-card')!
     const index = Array.from(card.parentElement!.children).indexOf(card)
-    const top = (index - position) * 600
+    // The swipe gesture drives the feed's real scrollTop; follow it when set.
+    const feedEl = this.closest('.feed')
+    const effectivePosition = feedEl && feedEl.scrollTop !== 0 ? feedEl.scrollTop / 600 : position
+    const top = (index - effectivePosition) * 600
     return this.classList.contains('player-surface')
       ? new DOMRect(0, top + 60, 240, 420) : new DOMRect(0, top, 390, 600)
   })
@@ -51,12 +56,21 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo
 })
 
-it('requests the ready next player synchronously without waiting for a scroll event', () => {
+/** Shorts-style swipe on a card: down on its gesture layer, move, up. */
+const swipe = (index: number, fromY: number, toY: number) => {
+  const card = document.querySelectorAll('.video-card')[index]
+  const layer = card.querySelector('.gesture-layer')!
+  fireEvent.pointerDown(layer, { pointerId: 7, clientX: 100, clientY: fromY, pointerType: 'touch' })
+  fireEvent.pointerMove(card, { pointerId: 7, clientX: 100, clientY: Math.round((fromY + toY) / 2), pointerType: 'touch' })
+  fireEvent.pointerUp(card, { pointerId: 7, clientX: 100, clientY: toY, pointerType: 'touch' })
+}
+
+it('requests the ready next player synchronously on swipe, without waiting for a scroll event', () => {
   render(<VideoFeed videos={testVideos} />)
   const first = players.get(0)!, next = players.get(1)!
   vi.mocked(first.pauseVideo).mockClear()
   act(() => {
-    fireEvent.click(screen.getByRole('button', { name: '次へ ↓' }))
+    swipe(0, 500, 100)
     // Assert inside the event turn, before any asynchronous scroll event.
     expect(next.playVideo).toHaveBeenCalledOnce()
   })
@@ -67,8 +81,19 @@ it('requests the ready next player synchronously without waiting for a scroll ev
 it('does not authorize the target when scrolling fails to make it visible', () => {
   render(<VideoFeed videos={testVideos} />)
   scrollWorks = false
-  fireEvent.click(screen.getByRole('button', { name: '次へ ↓' }))
+  swipe(0, 500, 100)
   expect(players.get(1)!.playVideo).not.toHaveBeenCalled()
+})
+
+it('toggles playback when the video surface is tapped', () => {
+  render(<VideoFeed videos={testVideos} />)
+  const first = players.get(0)!
+  first.getPlayerState.mockReturnValue(1)
+  vi.mocked(first.pauseVideo).mockClear()
+  const layer = document.querySelectorAll('.video-card')[0].querySelector('.gesture-layer')!
+  fireEvent.pointerDown(layer, { pointerId: 9, clientX: 100, clientY: 300, pointerType: 'touch' })
+  fireEvent.pointerUp(layer, { pointerId: 9, clientX: 100, clientY: 302, pointerType: 'touch' })
+  expect(first.pauseVideo).toHaveBeenCalledOnce()
 })
 
 it('loads the card in the feed even when viewport clipping prevents autoplay', () => {
@@ -102,7 +127,7 @@ it.each([true, false])('bounds mounted players over 100 transitions (preload=%s)
     const previous = players.get(position)!
     vi.mocked(previous.pauseVideo).mockClear()
     const forward = step % 4 < 2
-    fireEvent.click(screen.getByRole('button', { name: forward ? '次へ ↓' : '↑ 前へ' }))
+    if (forward) swipe(position, 500, 100); else swipe(position, 100, 500)
     expect(previous.pauseVideo).toHaveBeenCalled()
     const expected = preloadAdjacent
       ? [0, 1, 2].filter(index => Math.abs(index - position) <= 1) : [position]

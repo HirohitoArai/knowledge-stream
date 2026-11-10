@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { ReactNode } from 'react'
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react'
 import { PlaybackCoordinator } from './player/PlaybackCoordinator'
 import { inMountWindow, retainedPlayers, selectActive, visibleRatio } from './player/visibility'
 import { YouTubePlayer } from './player/YouTubePlayer'
@@ -94,6 +94,73 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
     measureNow.current?.()
   }
 
+  // Shorts-style navigation: a vertical swipe on the video moves one card,
+  // and a tap on the video toggles play/pause through the coordinator. The
+  // cross-origin YouTube iframe swallows touch gestures, so YouTubePlayer
+  // renders a transparent gesture layer over it and these events bubble up
+  // from that layer (or from the card itself outside the player).
+  const gesture = useRef<{
+    pointerId: number; index: number; startX: number; startY: number
+    startScrollTop: number; mode: 'pending' | 'scroll' | 'ignore'; startedAt: number
+  } | null>(null)
+
+  const onCardPointerDown = (event: ReactPointerEvent<HTMLElement>, index: number) => {
+    if (gesture.current) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    gesture.current = {
+      pointerId: event.pointerId, index,
+      startX: event.clientX, startY: event.clientY,
+      startScrollTop: viewport.current?.scrollTop ?? 0,
+      mode: 'pending', startedAt: performance.now(),
+    }
+    const target = event.target as HTMLElement
+    if (target.classList.contains('gesture-layer')) {
+      try { target.setPointerCapture(event.pointerId) } catch { /* best effort */ }
+    }
+  }
+
+  const onCardPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
+    const current = gesture.current
+    const root = viewport.current
+    if (!current || !root || event.pointerId !== current.pointerId) return
+    const dy = event.clientY - current.startY
+    const dx = event.clientX - current.startX
+    if (current.mode === 'pending') {
+      if (Math.abs(dy) < 10) return
+      if (Math.abs(dy) <= Math.abs(dx)) { current.mode = 'ignore'; return }
+      current.mode = 'scroll'
+      // Snap would fight the finger while it drags the feed.
+      root.style.scrollSnapType = 'none'
+    }
+    if (current.mode === 'scroll') root.scrollTop = current.startScrollTop - dy
+  }
+
+  const endGesture = (event: ReactPointerEvent<HTMLElement>, cancelled: boolean) => {
+    const current = gesture.current
+    if (!current || event.pointerId !== current.pointerId) return
+    gesture.current = null
+    const root = viewport.current
+    if (root) root.style.scrollSnapType = ''
+    if (cancelled) return
+    const dy = event.clientY - current.startY
+    if (current.mode === 'scroll') {
+      const step = dy <= -48 ? 1 : dy >= 48 ? -1 : 0
+      navigate(Math.min(videos.length - 1, Math.max(0, current.index + step)))
+    } else if (current.mode === 'pending'
+      && performance.now() - current.startedAt < 600
+      && (event.target as HTMLElement).classList.contains('gesture-layer')) {
+      coordinator.toggle(current.index)
+    }
+  }
+
+  const onFeedKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === 'ArrowDown' || event.key === 'PageDown') {
+      event.preventDefault(); navigate(Math.min(videos.length - 1, center + 1))
+    } else if (event.key === 'ArrowUp' || event.key === 'PageUp') {
+      event.preventDefault(); navigate(Math.max(0, center - 1))
+    }
+  }
+
   // Report activations upward (SPEC section 3: a video counts as viewed
   // when it becomes the active one). Playback authority stays here; this is
   // only a notification, keyed by internal id.
@@ -122,8 +189,12 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
   if (!videos.length) return <main className="empty-state">表示できる動画がありません。ジャンル選択や登録動画を確認してください。</main>
 
   return <>
-    <main className="feed" ref={viewport} aria-label="動画フィード" tabIndex={0}>
-      {videos.map((video, index) => <article key={video.id} className="video-card" aria-label={`${index + 1}本目: ${video.label}`} data-active={active === index}>
+    <main className="feed" ref={viewport} aria-label="動画フィード" tabIndex={0} onKeyDown={onFeedKeyDown}>
+      {videos.map((video, index) => <article key={video.id} className="video-card" aria-label={`${index + 1}本目: ${video.label}`} data-active={active === index}
+        onPointerDown={event => onCardPointerDown(event, index)}
+        onPointerMove={onCardPointerMove}
+        onPointerUp={event => endGesture(event, false)}
+        onPointerCancel={event => endGesture(event, true)}>
         <div className="video-meta">
           <span className="eyebrow">{video.categories.length > 0 ? video.categories.join(' / ') : 'ジャンル未設定'} <span> / {String(index + 1).padStart(2, '0')} · 独自ラベル</span></span>
           <h2>{video.label}</h2>
@@ -136,11 +207,11 @@ export function VideoFeed({ videos, preloadAdjacent = true, focusExternalVideoId
         {renderCardExtras?.(video)}
       </article>)}
     </main>
-    <section className="feed-controls" aria-label="動画の切り替え">
-      <div><button onClick={() => navigate(center - 1)} disabled={center === 0}>↑ 前へ</button>
+    <section className="feed-controls" aria-label="現在の動画">
+      <div>
         <div className="current-video"><span aria-live="polite">{center + 1} / {videos.length}</span>
           <a className="youtube-link" href={`https://www.youtube.com/watch?v=${videos[center].externalVideoId}`} target="_blank" rel="noreferrer">{videos[center].label} ↗</a></div>
-        <button onClick={() => navigate(center + 1)} disabled={center === videos.length - 1}>次へ ↓</button></div>
+      </div>
     </section>
   </>
 }

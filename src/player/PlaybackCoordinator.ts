@@ -1,5 +1,5 @@
 import { countPlayerWork } from './diagnostics'
-export type PlayerControl = Pick<YT.Player, 'pauseVideo' | 'playVideo' | 'mute' | 'unMute'>
+export type PlayerControl = Pick<YT.Player, 'pauseVideo' | 'playVideo' | 'mute' | 'unMute' | 'getPlayerState'>
 
 // One synchronous authority: pause old players before starting a new one.
 // React state/async onReady callbacks are not trusted as playback eligibility.
@@ -38,6 +38,16 @@ export class PlaybackCoordinator {
     if (!this.canPlay(index)) return
     const player = this.players.get(index)
     if (player) this.start(player)
+  }
+
+  // Tap on the video surface toggles the active player through the official
+  // API (the gesture layer covers the iframe, so taps cannot reach it).
+  toggle(index: number) {
+    if (!this.canPlay(index)) return
+    const player = this.players.get(index)
+    if (!player) return
+    if (player.getPlayerState() === 1) player.pauseVideo()
+    else this.start(player)
   }
 
   onStateChange(index: number, player: PlayerControl, state: number) {

@@ -23,6 +23,9 @@ h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 /* Give the official iframe the available screen. YouTube fits the whole video;
    no object-fit crop, scale transform, or independent overlay covers its UI. */
 .player-surface { position: relative; min-height: 200px; width: 100%; flex: 1; background: #000; }
+.player-wrap { position: relative; flex: 1; min-height: 200px; width: 100%; display: flex; }
+.gesture-layer { position: absolute; inset: 0; touch-action: none; }
+@media (pointer: fine) { .gesture-layer { display: none; } }
 .player-surface iframe { position: absolute; inset: 0; display: block; width: 100%; height: 100%; border: 0; }
 .placeholder { display: grid; place-items: center; color: #91a5ae; font-size: 12px; padding: 16px; }
 .player-status { width: 100%; min-height: 48px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #b5c5cc; padding-top: 4px; }
@@ -31,7 +34,7 @@ h2 { font-size: clamp(16px, 2.5vw, 22px); margin: 3px 0 0; }
 .youtube-link { display: block; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .current-video { min-width: 0; text-align: center; }
 .feed-controls { border-top: 1px solid #2d424b; padding: 0 8px; }
-.feed-controls > div { display: flex; align-items: center; justify-content: space-between; max-width: 540px; margin: auto; gap: 8px; }
+.feed-controls > div { display: flex; align-items: center; justify-content: center; max-width: 540px; margin: auto; gap: 8px; padding: 6px 0; }
 .feed-controls button { flex-shrink: 0; padding: 6px 12px; border-radius: 0; border: 0; background: transparent; }
 .feed-controls span { color: #b5c5cc; font-size: 12px; font-variant-numeric: tabular-nums; }
 .bottom-nav { display: grid; grid-template-columns: repeat(3, 1fr); background: #15252d; border-top: 1px solid #2d424b; padding: 0 max(4px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px, env(safe-area-inset-left)); }

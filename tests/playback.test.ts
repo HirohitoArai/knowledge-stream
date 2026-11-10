@@ -2,7 +2,25 @@ import { describe, expect, it, vi } from 'vitest'
 import { PlaybackCoordinator } from '../src/player/PlaybackCoordinator'
 import { inMountWindow, retainedPlayers, selectActive } from '../src/player/visibility'
 
-const player = () => ({ pauseVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn(), playVideo: vi.fn() })
+const player = () => ({ pauseVideo: vi.fn(), mute: vi.fn(), unMute: vi.fn(), playVideo: vi.fn(), getPlayerState: vi.fn(() => 2) })
+
+describe('tap toggle', () => {
+  it('pauses a playing active player and starts a paused one, only when active', () => {
+    const coordinator = new PlaybackCoordinator()
+    const first = player()
+    coordinator.register(0, first)
+    coordinator.setActive(0)
+    vi.mocked(first.pauseVideo).mockClear(); vi.mocked(first.playVideo).mockClear()
+    first.getPlayerState.mockReturnValue(1)
+    coordinator.toggle(0)
+    expect(first.pauseVideo).toHaveBeenCalledOnce()
+    first.getPlayerState.mockReturnValue(2)
+    coordinator.toggle(0)
+    expect(first.playVideo).toHaveBeenCalledOnce()
+    coordinator.toggle(1)
+    expect(first.pauseVideo).toHaveBeenCalledOnce()
+  })
+})
 
 describe('visibility and mount window', () => {
   it('bounds reuse at three while always keeping the entire media load window', () => {

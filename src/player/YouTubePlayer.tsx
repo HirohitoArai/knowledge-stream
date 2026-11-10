@@ -50,6 +50,7 @@ export function YouTubePlayer({ video, index, coordinator, load = true }: {
       pauseVideo: () => player!.pauseVideo(),
       mute: () => player!.mute(),
       unMute: () => player!.unMute(),
+      getPlayerState: () => player!.getPlayerState(),
       playVideo: () => {
         if (needsVideoLoad) {
           needsVideoLoad = false
@@ -158,7 +159,14 @@ export function YouTubePlayer({ video, index, coordinator, load = true }: {
   }, [video, index, coordinator, attempt])
 
   return <>
-    <div className="player-surface" ref={host} />
+    <div className="player-wrap">
+      <div className="player-surface" ref={host} />
+      {/* Touch gesture layer: the cross-origin iframe swallows touch gestures,
+          so vertical swipes for feed navigation and tap-to-toggle are handled
+          here via pointer events that bubble to the feed card. Mouse pointers
+          skip the layer (CSS) and keep the native YouTube UI. */}
+      <div className="gesture-layer" aria-hidden="true" />
+    </div>
     <div className="player-status" data-actionable={Boolean(error || slow || ((blocked || canRequestPlay) && coordinator.canPlay(index)))} role="status" aria-live="polite">
       <span>{error ?? (slow ? '動画の読み込みが長引いています。再読み込みか次へをお試しください。' : status)}</span>
       {(error || slow) ? <button onClick={() => setAttempt(n => n + 1)}>{error ? '再試行' : '再読み込み'}</button>
